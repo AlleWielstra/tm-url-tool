@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Replace Spaces</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f7f7f7;
+        }
+        #columnSelector {
+            width: 100%;
+            padding: 10px;
+        }
+
+        #upload,
+        #columnSelector,
+        button {
+            margin-bottom: 15px;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f7f7f7;
+        }
+        #inputField {
+            padding: 10px;
+            font-size: 16px;
+            width: 300px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            background-color: #FFBC03;
+            color: black;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #ff9203;
+        }
+        button:disabled {
+            background-color: grey;
+        }
+        .result {
+            margin-top: 20px;
+            font-size: 20px;
+            color: #333;
+        }
+        .copyButton {
+            display: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.8/xlsx.full.min.js"></script>
+</head>
+
+<body>
+<div class="fileupload-con">
+    <input type="file" id="upload" onchange="handleFile()" /> <br><br>
+</div>
+<div class="select-con" id="select-con" style="display: none;">
+    Kies de kolom met de sku's:
+    <select id="columnSelector" ></select>
+</div>
+<div class="button-con">
+    <button onclick="processExcelData()" disabled id="process_button">Process Excel Data</button>
+</div>
+<div class="dl-link-con" id="DownloadLinkCont">
+</div>
+
+<script>
+    let workbook, selectedSheet, currentFilename;
+
+    function handleFile() {
+        const input = document.getElementById('upload');
+        const file = input.files[0];
+        currentFilename = file.name;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const data = e.target.result;
+            workbook = XLSX.read(data, { type: 'binary' });
+
+            selectedSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+            let columnSelector = document.getElementById('columnSelector');
+            for (let cell in selectedSheet) {
+                if (cell[1] === '1' && cell !== '!ref' && !columnSelector.options.namedItem(cell[0])) {
+                    let option = document.createElement("option");
+                    option.value = cell[0];
+                    option.textContent = selectedSheet[cell].v;
+                    option.id = cell[0];  // give it an id so we can check for duplicates
+                    columnSelector.appendChild(option);
+                }
+            }
+            document.getElementById('select-con').style.display = '';
+            document.getElementById('process_button').disabled = false;
+        }
+        reader.readAsBinaryString(file);
+    }
+
+    function processExcelData() {
+        const column = document.getElementById('columnSelector').value;
+
+        const dataAoa = XLSX.utils.sheet_to_json(selectedSheet, { header: 1, blankrows: false });
+
+        const lastColIndex = dataAoa[0].length;
+        const lastRowIndex = dataAoa.length;
+
+        console.log(`Determined last column index as: ${lastColIndex}`);
+        console.log(`Determined last row index as: ${lastRowIndex}`);
+
+        dataAoa[0].push("URL_path", "Volledige_URL");
+
+        for (let rowIndex = 1; rowIndex < lastRowIndex; rowIndex++) {
+            const value = dataAoa[rowIndex][column.charCodeAt(0) - 65];
+
+            let trimmed = value.trimStart().toLowerCase();
+            let result = trimmed.replace(/[^a-z0-9]+/g, '-');
+
+            if (result.endsWith('-')) {
+                result = result.slice(0, -1);
+            }
+
+            let filename = result + ".html";
+            let resultURL = "https://www.toolmax.nl/" + filename;
+
+            dataAoa[rowIndex].push(filename, resultURL);
+
+            console.log(`Row ${rowIndex + 1}, Filename: ${filename}, URL: ${resultURL}`);
+        }
+
+        console.log("Final AOA data:", dataAoa);
+
+        let newWb = XLSX.utils.book_new();
+        const newWs = XLSX.utils.aoa_to_sheet(dataAoa);
+
+        XLSX.utils.book_append_sheet(newWb, newWs, "Processed Data");
+
+        const wbout = XLSX.write(newWb, { bookType: 'xlsx', type: 'binary' });
+        const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
+
+        const downloadLinkCont = document.getElementById('DownloadLinkCont');
+
+        // Create a new 'a' element
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.classList.add('downloadLink'); // using class instead of id because there will be multiple links
+        a.style.display = 'block';
+        a.download = getNewFileName();
+        a.textContent = 'Download ' + getNewFileName();
+
+        // Append the new 'a' element to the container
+        downloadLinkCont.appendChild(a);
+    }
+    function getNewFileName() {
+        const timestamp = Math.floor(Date.now() / 1000);
+        let splitFilename = currentFilename.split('.');
+
+        return splitFilename[0] + " - verwerkt - " + timestamp + ".xlsx";
+    }
+
+
+    function s2ab(s) {
+        const buf = new ArrayBuffer(s.length);
+        const view = new Uint8Array(buf);
+        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+        return buf;
+    }
+
+</script>
+
+</body>
+
+</html>
